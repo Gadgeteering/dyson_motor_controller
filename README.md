@@ -13,4 +13,11 @@
 <div align="center">
 V6 and V10 Setup</div>
 
+
+Using the Electronoobs Esc to drive motor
+
+
+
+<img width="100%" src=https://electronoobs.com/images/Arduino/tut_91/sch_1.jpg>
+
 \
