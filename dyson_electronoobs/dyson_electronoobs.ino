@@ -31,35 +31,83 @@
 // #define DYSON_V6
 //#define DYSON_V10
 
+void test_seq()
+{
+test_AL();
+test_BL();
+test_AH();
+test_BH();
+}
 
+void test_AL()
+{
+  cli();
+  all_off();
+  PORTD = B0010000;
+  Serial.println("AL");
+  delay(20000);
+  sei(); //reset interrupt
+}
+
+void test_AH()
+{
+  cli();
+  all_off();
+  PORTB |= B0000010;
+  Serial.println("AH");
+  delay(20000);
+  sei(); //reset interrupt
+}
+
+void test_BH()
+{
+  cli();
+  all_off();
+  PORTB |= B0000100;
+  Serial.println("BH");
+  delay(20000);
+  sei(); //reset interrupt
+}
+
+void test_BL()
+{
+  cli();
+  all_off();
+  PORTD = B0001000;
+  Serial.println("BL");
+  delay(20000);
+  sei(); //reset interrupt
+}
 
 void forward()
 //D10 PWM and D2 HIGH
 //BH_CL
 {
-  PORTD = B00010000;      //Set D2 (AL) to HIGH and the rest to LOW
-  PORTB = B00000100;    //Set B2 (BH) to HIGH and the rest to LOW
-  //TCCR2A =  0;            //OC2A - D11 normal port. 
-  //TCCR1A =  0;         //OC1B - D10 (BH) compare match noninverting mode, downcounting ,PWM 8-bit 
+  all_off();
+  PORTD = B0010000;      //Set D2 (AL) to HIGH and the rest to LOW
+  PORTB |= B0000100;    //Set B2 (BH) to HIGH and the rest to LOW
+
 }
 void reverse()
 //D11 PWM and D3 HIGH
 //CH_BL()
 {
-  PORTD = B00001000;      //Set D3 (BL) to HIGH and the rest to LOW
-  PORTB = B00000010;    //Set B3 (AH) to HIGH and the rest to LOW
-  //TCCR1A =  0;            // OC1A and OC1B normal port
-  //TCCR2A =  0x0;         //  (AH) compare match noninverting mode, downcounting ,PWM 8-bit
+  all_off();
+  PORTD = B0001000;      //Set D3 (BL) to HIGH and the rest to LOW
+  PORTB |= B0000010;    //Set B3 (AH) to HIGH and the rest to LOW
+
+  
 }
 
 void all_off()
 
 //All MOSFET off
 {
-  PORTD = B00000000;      //Set D3 (BL) to HIGH and the rest to LOW
-  PORTB = B00000000;    //Set B3 (CH) to HIGH and the rest to LOW
-  //TCCR1A =  0;            // OC1A and OC1B normal port
-  //TCCR2A =  0x0;         // OC2A - D11 (CH) compare match noninverting mode, downcounting ,PWM 8-bit
+  TCCR1A =  0;            // OC1A and OC1B normal port
+  TCCR2A =  0x0;         // OC2A - D11 (CH) compare match noninverting mode, downcounting ,PWM 8-bit
+  PORTD = B0000000;      //Set D3 (BL) to HIGH and the rest to LOW
+  PORTB  &= B0110001;     //Set B3 (CH) to HIGH and the rest to LOW
+  
 }
 
 
@@ -82,16 +130,24 @@ void head_start()
   reverse();
   delayMicroseconds(4000);
   forward();
+  int i =digitalRead(HALL_EFFECT);
+  Serial.print(i);
   delayMicroseconds(4000);
   for (int i = 0; i < 10; i++)
   {
     if (digitalRead(HALL_EFFECT))
     {
       reverse();
+      int i =digitalRead(HALL_EFFECT);
+      Serial.print("R:");
+      Serial.println(i);
     }
     else
     {
       forward();
+      int i =digitalRead(HALL_EFFECT);
+      Serial.print("F:");
+      Serial.println(i);
     }
     delayMicroseconds(500);
   }
@@ -224,7 +280,7 @@ void hall_effect_int()
   }
 
   // hall_value = digitalRead(HALL_EFFECT);
-  hall_value = (PINB & 0b00000001);// Pin 8 
+  hall_value = (PINB & B00000001);// Pin 8 
 
   if (hall_value)
   {
@@ -329,17 +385,21 @@ ISR(TIMER2_COMPA_vect){
   }
 }
 
+
+int display_int;
+int head_count;
+
 void setup()
 {
     Serial.begin(115200);
-  
-    pinMode(HALL_EFFECT, INPUT);
     //pinMode(HALL_EFFECT, INPUT_PULLUP);
     //Our pins for the MNSFET drivers are 2,3,4 and 9,10,11
-    DDRD   = B00011100;           //Configure pins 2, 3 and 4 as outputs CL, BL and AL
-    PORTD  = B00000000;           //Pins 0 to 7 set to LOW
-    DDRB   = B00001110;           //Configure pins 9, 10 and 11 as outputs
-    PORTB  = B00000000;          //D9, D10 and D11 to LOW
+    DDRD   = B0011100;           //Configure pins 2, 3 and 4 as outputs CL, BL and AL
+    PORTD  = B0000000;           //Pins 0 to 7 set to LOW
+    DDRB   = B0001110;           //Configure pins 9, 10 and 11 as outputs
+    PORTB  = B0000000;          //D9, D10 and D11 to LOW
+    pinMode(HALL_EFFECT, INPUT);
+
 
     cli();
 
@@ -351,8 +411,8 @@ void setup()
     TCNT1  = 0; // Clear timer1 counter
   
     // Compare A
-    TCCR1B |= B00000010; // CS12 CS11 CS10 -> 010 -> CLK / 8
-    TIMSK1 |= B00000010; // Set OCIE1A 1 -> compare match for A
+    TCCR1B |= B0000010; // CS12 CS11 CS10 -> 010 -> CLK / 8
+    TIMSK1 |= B0000010; // Set OCIE1A 1 -> compare match for A
     OCR1A = 12; // 16 MHz / 8 / 12 -> 6us
   
     // Timer 2
@@ -361,21 +421,34 @@ void setup()
 
 
     // Compare A
-    TCCR2B |= B00000101; // CS12 CS11 CS10 -> 101 -> CLK / 1024 
-    TIMSK2 |= B00000010; //Set OCIE1A to 1 -> compare match for A
+    TCCR2B |= B0000101; // CS12 CS11 CS10 -> 101 -> CLK / 1024 
+    TIMSK2 |= B0000010; //Set OCIE1A to 1 -> compare match for A
     OCR2A = 157; // 16 MHz / 1024 / 157 -> ~10 ms
 
     Serial.println("start");
     //enable_driver();
+    head_count = 0;
+    while(head_count<5)
+    {
     head_start();
+    head_count ++;
+    }
     Serial.println("head_start");
     // Initial condition setup
     state = FIRST_STATE;
     pulse_duration = pulse_cycle_arr[FIRST_STATE];
     early_pulse_cnt_from_inhibit =  early_pulse_cycles[FIRST_STATE];
     early_pulse_enable = early_pulse_cycles[FIRST_STATE] != 0;
-  
+    display_int = 0;
+    //while(1)
+    //{
+    //  test_AL();
+    //  test_BL();
+    //  test_AH();
+    //  test_BH();
+    //}
     sei(); // Enable back the interrupts
+
 }
 
 void loop()
@@ -395,7 +468,7 @@ void loop()
   {
     char data = Serial.read();
 
-    if (data == 'a')
+    if (data == 'x')
     {
       pulse_duration++;
     }
@@ -418,7 +491,7 @@ void loop()
     if (data == 's')
     {
       cli();
-      //disable_driver();
+      all_off();
     }
     if (data == 'S')
     {
@@ -432,7 +505,47 @@ void loop()
     {
       reverse();
     }
+    if (data == 'P')
+    {
+      head_start();
+    }
+
+    if (data == 'a')
+    {
+      test_AL();
+    }
+    if (data == 'A')
+    {
+      test_AH();
+    }
+    if (data == 'b')
+    {
+      test_BL();
+    }
+    if (data == 'B')
+    {
+      test_BH();
+    }
+    if (data == 'T')
+    {
+    head_count = 0;
+      while(head_count<10)
+      {
+        test_seq();
+        head_count ++;
+      }
+    }
+    
+
+    
   }
+  display_int ++;
+  if (display_int > 20000){
+  hall_value = (PINB & B00000001);// Pin 8 
+  display_int = 0;
+  Serial.print(" Hall: ");
+  Serial.print(hall_value);
+  Serial.print(" ");
 
   int motor_speed = map(speed,rpm_thresholds[state][0],rpm_thresholds[state][1],PWM_min_value,PWM_max_value);
 
@@ -452,7 +565,6 @@ void loop()
   // Serial.print(delta_time_high);
   // Serial.print(" low: ");
   // Serial.print(delta_time_low);
-
   // Serial.print(" forward_cnt: ");
   // Serial.print(forward_cnt_happenned);
   // Serial.print(" reverse_cnt: ");
@@ -470,4 +582,5 @@ void loop()
   // Serial.print(early_pulse_enable);
   // Serial.print(" early_pulse_cnt_from_inhibit: ");
   // Serial.println(early_pulse_cnt_from_inhibit);
+  }
 }

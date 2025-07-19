@@ -11,7 +11,7 @@
 
 // CURRENT_LIMIT_ANALOG_COUNTER / 1023 * 5 * 19.5A = I_LIMIT
 #define CURRENT_LIMIT_ANALOG_COUNTER      1000 
-#define ENABLE_CURRENT_LIMIT_CHECK        false
+#define ENABLE_CURRENT_LIMIT_CHECK        true
 
 #define REF_CYCLE_FROM_DISABLE_TO_ENABLE  8
 
@@ -560,4 +560,8 @@ void loop()
   // Serial.print(" early_pulse_cnt_from_inhibit: ");
   // Serial.println(early_pulse_cnt_from_inhibit);
   }
+<<<<<<< HEAD:dyson_1_5.ino
 }
+=======
+}
+>>>>>>> f1228e7 (add MEGA2560 pin config):dyson_1_5/dyson_1_5.ino
