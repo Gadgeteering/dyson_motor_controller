@@ -8,49 +8,87 @@
 #define R_IS  A0
 #define L_IS  A1
 
+
 // CURRENT_LIMIT_ANALOG_COUNTER / 1023 * 5 * 19.5A = I_LIMIT
 #define CURRENT_LIMIT_ANALOG_COUNTER      1000 
 #define ENABLE_CURRENT_LIMIT_CHECK        false
 
 #define REF_CYCLE_FROM_DISABLE_TO_ENABLE  8
 
-// #define DYSON_V2
+#define DYSON_V2
 // #define DYSON_V6
-#define DYSON_V10
+//#define DYSON_V10
+
+
+#define ARDUINO_AVR_MEGA256
+//#define ARDUINO_AVR_UNO
+
+#if defined(ARDUINO_AVR_UNO)
+  // Uno pin assignments
+#elif defined(ARDUINO_AVR_MEGA256)
+  // Pro Mini assignments
+#else
+  #error Unsupported board selection.
+#endif
 
 void disable_driver()
 {
-  // digitalWrite(R_INH, 0);
-  // digitalWrite(L_INH, 0);
+  //digitalWrite(R_INH, 0);
+  //digitalWrite(L_INH, 0);
+  #if defined(ARDUINO_AVR_UNO)
   PORTB &= 0b11001111;
+  #endif
+  #if defined(ARDUINO_AVR_MEGA256)
+  PORTB &=0b00111111; // Change to Mega 2560
+  #endif
+
 }
 
 void enable_driver()
 {
-  // digitalWrite(R_INH, 1);
-  // digitalWrite(L_INH, 1);
-  PORTB |= 0b00110000;
+  //digitalWrite(R_INH, 1);
+  //digitalWrite(L_INH, 1);
+  #if defined(ARDUINO_AVR_UNO)
+  PORTB |=0b00110000;
+  #endif
+   #if defined(ARDUINO_AVR_MEGA256)
+  PORTB |=0b11000000; // Change to Mega 2560
+  #endif
 }
 
 void forward()
 {
-  // digitalWrite(R_IN, 1);
-  // digitalWrite(L_IN, 0);
+  //digitalWrite(R_IN, 1);
+  //digitalWrite(L_IN, 0);
+   #if defined(ARDUINO_AVR_MEGA256)
+  PORTE |= 0b00100000;// Change to Mega 2560
+  PORTB &= 0b11011111;
+  #endif
+  #if defined(ARDUINO_AVR_UNO)
   PORTD |= 0b00001000;
   PORTB &= 0b11110111;
+  #endif
 }
 
 void reverse()
 {
-  // digitalWrite(R_IN, 0);
-  // digitalWrite(L_IN, 1);
+   //digitalWrite(R_IN, 0);
+   //digitalWrite(L_IN, 1);
+  #if defined(ARDUINO_AVR_MEGA256)
+  PORTE &= 0b11011111;// Change to Mega 2560
+  PORTB |= 0b00100000;
+  #endif
+  #if defined(ARDUINO_AVR_UNO)
   PORTD &= 0b11110111;
   PORTB |= 0b00001000;
+  #endif
 }
 
 void head_start()
 {
   // Poking
+  cli();
+  enable_driver();
   reverse();
   delayMicroseconds(4000);
   forward();
@@ -65,8 +103,10 @@ void head_start()
     {
       forward();
     }
-    delayMicroseconds(500);
+    delayMicroseconds(1500);
   }
+  disable_driver();
+  sei();
 }
 
 #define FIRST_STATE 0
@@ -196,9 +236,14 @@ void hall_effect_int()
     enable_driver();
   }
 
-  // hall_value = digitalRead(HALL_EFFECT);
+  //hall_value = digitalRead(HALL_EFFECT);
+  #if defined(ARDUINO_AVR_UNO)
   hall_value = (PIND & 0b00000100);
-
+  #endif
+  //hall_value = (PIND & 0b00000100);
+  #if defined(ARDUINO_AVR_MEGA256)
+  hall_value = (PINE & 0b00010000); // Changes for MEGA2560
+  #endif
   if (hall_value)
   {
     time_rising = micros();
@@ -302,7 +347,6 @@ ISR(TIMER2_COMPA_vect){
 void setup()
 {
     Serial.begin(115200);
-  
     pinMode(HALL_EFFECT, INPUT);
     pinMode(HALL_EFFECT, INPUT_PULLUP);
     pinMode(R_IS, INPUT);
@@ -311,13 +355,13 @@ void setup()
     pinMode(L_INH, OUTPUT);
     pinMode(R_IN, OUTPUT);
     pinMode(L_IN, OUTPUT);
-
+    
     disable_driver();
-
     cli();
-
     attachInterrupt(digitalPinToInterrupt(HALL_EFFECT), hall_effect_int, CHANGE);
-  
+
+   
+      
     // Timer 1
     TCCR1A = 0; // Reset entire TCCR1A to 0 
     TCCR1B = 0; // Reset entire TCCR1B to 0
@@ -337,20 +381,27 @@ void setup()
     TIMSK2 |= B00000010; //Set OCIE1A to 1 -> compare match for A
     OCR2A = 157; // 16 MHz / 1024 / 157 -> ~10 ms
 
-    enable_driver();
-    head_start();
+
+    TCCR2A =  0;
+    TCCR1A =  0;
+
 
     // Initial condition setup
     state = FIRST_STATE;
     pulse_duration = pulse_cycle_arr[FIRST_STATE];
     early_pulse_cnt_from_inhibit =  early_pulse_cycles[FIRST_STATE];
     early_pulse_enable = early_pulse_cycles[FIRST_STATE] != 0;
-  
+
+    head_start();
+    enable_driver();
+
     sei(); // Enable back the interrupts
 }
+int display_int = 0;
 
 void loop()
 {
+
   float period_time = (float)(delta_time_high + delta_time_low);
 
 #ifdef DYSON_V10 // 8 poles, single phase
@@ -391,6 +442,63 @@ void loop()
       cli();
       disable_driver();
     }
+    if (data == 'b'){
+  // 1Khz
+  cli();
+  int milliseconds = 1000;
+  int x = 0;
+  while (x < milliseconds)
+  { 
+    //digitalWrite(L_IN, 1);
+    //digitalWrite(L_INH, 1); //Enable LH
+    //digitalWrite(R_INH, 1); // Enable RH
+    //digitalWrite(R_IN, 0);
+    enable_driver();
+    reverse();
+    delayMicroseconds(150);
+    digitalWrite(R_INH, 0); // Enable RH
+    delayMicroseconds(450);
+    
+    digitalWrite(R_INH, 1); // Enable RH
+    delayMicroseconds(150);
+    digitalWrite(R_INH, 0); // Enable RH
+    delayMicroseconds(450);
+    x = x + 1;
+    }
+
+    digitalWrite(L_INH, 0); //Enable LH
+    digitalWrite(R_INH, 0); // Enable RH
+    sei();
+  }
+  
+    if (data == 't')
+    { //Test Driver
+  
+      digitalWrite(L_INH, 0); // Disable RH
+      digitalWrite(L_IN, 0);
+      digitalWrite(R_INH, 1); // Enable RH
+      digitalWrite(R_IN, 1);
+      Serial.println(" RH High ");
+      delay(10000);
+      digitalWrite(R_IN, 0);
+      Serial.println(" RH Low ");
+      delay(10000);
+      digitalWrite(R_INH, 0); // Disable RH
+      digitalWrite(L_IN, 1);
+      digitalWrite(L_INH, 1); //Enable LH
+
+      Serial.println(" LH High ");
+      delay(10000);
+      digitalWrite(L_IN, 0);
+      Serial.println(" LH Low ");
+      delay(10000);
+      disable_driver();
+
+    }
+      if (data == 'n')
+  { 
+    head_start();
+  }
   }
 
   int is_r = analogRead(R_IS);
@@ -400,14 +508,34 @@ void loop()
   {
     cli();
     disable_driver();
-  }
+    Serial.print(" Overcurrent ");
+    delay(10000);
 
+  }
+  is_r = is_r/ 1023 * 5;
+  display_int ++;
+  if (display_int > 2000){ 
+  display_int = 0;
+  //hall_value = digitalRead(HALL_EFFECT);
+  #if defined(ARDUINO_AVR_UNO)
+  Serial.printl(" UNO ");
+  #endif
+  #if defined(ARDUINO_AVR_MEGA256)
+  hall_value = (PINE & 0b00010000);
+  Serial.println(" MEGA 2560 ");
+  #endif
+  Serial.print("Current R: ");
+  Serial.print( is_r);
+  Serial.print(" L: ");
+  Serial.print( is_l);
+  Serial.print(" Sensor: ");
+  Serial.print( hall_value);
   Serial.print(" speed: ");
   Serial.print(speed);
   Serial.print(" RPM");
   
   Serial.print(" state: ");
-  Serial.println(state);
+  Serial.print(state);
 
   // Serial.print("high: ");
   // Serial.print(delta_time_high);
@@ -425,10 +553,11 @@ void loop()
   // Serial.print(is_r);
   // Serial.print(" is_l: ");
   // Serial.print(is_l);
-  // Serial.print(" pulse_duration: ");
-  // Serial.print(pulse_duration);
+  Serial.print(" pulse_duration: ");
+  Serial.println(pulse_duration);
   // Serial.print(" early_pulse_enable: ");
   // Serial.print(early_pulse_enable);
   // Serial.print(" early_pulse_cnt_from_inhibit: ");
   // Serial.println(early_pulse_cnt_from_inhibit);
+  }
 }
