@@ -1,115 +1,6 @@
-#define HALL_EFFECT 2
+#include "beeps.h"
+#include "variables.h"
 
-// H-Bridge Arduino Shield with BTN8982TA
-#define R_INH 12
-#define L_INH 13
-#define R_IN   3
-#define L_IN  11
-#define R_IS  A0
-#define L_IS  A1
-
-
-// CURRENT_LIMIT_ANALOG_COUNTER / 1023 * 5 * 19.5A = I_LIMIT
-#define CURRENT_LIMIT_ANALOG_COUNTER      1000 
-#define ENABLE_CURRENT_LIMIT_CHECK        false
-
-#define REF_CYCLE_FROM_DISABLE_TO_ENABLE  8
-
-#define DYSON_V2
-// #define DYSON_V6
-//#define DYSON_V10
-
-
-#define ARDUINO_AVR_MEGA256
-//#define ARDUINO_AVR_UNO
-
-#if defined(ARDUINO_AVR_UNO)
-  // Uno pin assignments
-#elif defined(ARDUINO_AVR_MEGA256)
-  // Pro Mini assignments
-#else
-  #error Unsupported board selection.
-#endif
-
-void disable_driver()
-{
-  //digitalWrite(R_INH, 0);
-  //digitalWrite(L_INH, 0);
-  #if defined(ARDUINO_AVR_UNO)
-  PORTB &= 0b11001111;
-  #endif
-  #if defined(ARDUINO_AVR_MEGA256)
-  PORTB &=0b00111111; // Change to Mega 2560
-  #endif
-
-}
-
-void enable_driver()
-{
-  //digitalWrite(R_INH, 1);
-  //digitalWrite(L_INH, 1);
-  #if defined(ARDUINO_AVR_UNO)
-  PORTB |=0b00110000;
-  #endif
-   #if defined(ARDUINO_AVR_MEGA256)
-  PORTB |=0b11000000; // Change to Mega 2560
-  #endif
-}
-
-void forward()
-{
-  //digitalWrite(R_IN, 1);
-  //digitalWrite(L_IN, 0);
-   #if defined(ARDUINO_AVR_MEGA256)
-  PORTE |= 0b00100000;// Change to Mega 2560
-  PORTB &= 0b11011111;
-  #endif
-  #if defined(ARDUINO_AVR_UNO)
-  PORTD |= 0b00001000;
-  PORTB &= 0b11110111;
-  #endif
-}
-
-void reverse()
-{
-   //digitalWrite(R_IN, 0);
-   //digitalWrite(L_IN, 1);
-  #if defined(ARDUINO_AVR_MEGA256)
-  PORTE &= 0b11011111;// Change to Mega 2560
-  PORTB |= 0b00100000;
-  #endif
-  #if defined(ARDUINO_AVR_UNO)
-  PORTD &= 0b11110111;
-  PORTB |= 0b00001000;
-  #endif
-}
-
-void head_start()
-{
-  // Poking
-  cli();
-  enable_driver();
-  reverse();
-  delayMicroseconds(4000);
-  forward();
-  delayMicroseconds(4000);
-  for (int i = 0; i < 10; i++)
-  {
-    if (digitalRead(HALL_EFFECT))
-    {
-      reverse();
-    }
-    else
-    {
-      forward();
-    }
-    delayMicroseconds(1500);
-  }
-  disable_driver();
-  sei();
-}
-
-#define FIRST_STATE 0
 
 const uint8_t early_pulse_cycles[]
 {
@@ -206,7 +97,6 @@ const float rpm_thresholds[][2]
   {80000.f, 150000.f}
 #endif
 };
-
 volatile uint8_t state = FIRST_STATE;
 volatile float speed = 0.f; // in RPM
 volatile bool hall_value = false;
@@ -229,120 +119,8 @@ volatile unsigned long time_falling = 0;
 volatile unsigned long delta_time_high = 0;
 volatile unsigned long delta_time_low = 0;
  
-void hall_effect_int()
-{
-  if (!early_pulse_enable)
-  {
-    enable_driver();
-  }
+#include "interrups.h"
 
-  //hall_value = digitalRead(HALL_EFFECT);
-  #if defined(ARDUINO_AVR_UNO)
-  hall_value = (PIND & 0b00000100);
-  #endif
-  //hall_value = (PIND & 0b00000100);
-  #if defined(ARDUINO_AVR_MEGA256)
-  hall_value = (PINE & 0b00010000); // Changes for MEGA2560
-  #endif
-  if (hall_value)
-  {
-    time_rising = micros();
-    delta_time_high = time_rising - time_falling;
-    forward_cnt_happenned = forward_cnt;
-    forward_cnt = 0;
-    inhibit_cnt_forward = 0;
-  }
-  else
-  {
-    time_falling = micros();
-    delta_time_low = time_falling - time_rising;
-    reverse_cnt_happenned = reverse_cnt;
-    reverse_cnt = 0;
-    inhibit_cnt_reverse = 0;
-
-    // Measures number of cycles between driver-off and hall effect sensor change
-    disable_to_hall_effect = inhibit_cnt_forward;
-  }
-}
-
-ISR(TIMER1_COMPA_vect){
-  TCNT1  = 0; // Clear for every interrupt
-
-  if (hall_value)
-  {
-    if (forward_cnt >= pulse_duration)
-    {
-      if (inhibit_cnt_forward == 0)
-      {
-        disable_driver();
-        reverse();
-      }
-      inhibit_cnt_forward++;
-    }
-    else
-    {
-      forward_cnt++;
-    }
-
-    if (early_pulse_enable)
-    {
-      if (inhibit_cnt_forward == early_pulse_cnt_from_inhibit)
-      {
-        enable_driver();
-      }
-    }
-  }
-  else
-  {
-    if (reverse_cnt >= pulse_duration)
-    {
-      if (inhibit_cnt_reverse == 0)
-      {
-        disable_driver();
-        forward();
-      }
-      inhibit_cnt_reverse++;
-    }
-    else
-    {
-      reverse_cnt++;
-    }
-
-    if (early_pulse_enable)
-    {
-      if (inhibit_cnt_reverse == early_pulse_cnt_from_inhibit)
-      {
-        enable_driver();
-      }
-    }
-  }
-}
-
-volatile uint8_t cnt = 0;
-
-ISR(TIMER2_COMPA_vect){
-  TCNT2  = 0; // Clear for every interrupt
-
-  if (++cnt >= 25) // 25 * 10ms = 250ms
-  {
-    cnt = 0;
-  
-    if (speed > rpm_thresholds[state][1])
-    {
-      state++;
-    }
-  
-    if (speed < rpm_thresholds[state][0])
-    {
-      state--;
-    }
-
-    // Update pulse control parameters
-    pulse_duration = pulse_cycle_arr[state];
-    early_pulse_cnt_from_inhibit =  early_pulse_cycles[state];
-    early_pulse_enable = early_pulse_cycles[state] != 0;
-  }
-}
 
 void setup()
 {
@@ -394,7 +172,14 @@ void setup()
 
     head_start();
     enable_driver();
-
+    int x = 0;
+  while (x < 20)
+  {
+    beeps_1KHz();
+    beeps_2KHz();
+    beeps_3KHz();
+    x++;
+  }
     sei(); // Enable back the interrupts
 }
 int display_int = 0;
@@ -443,32 +228,7 @@ void loop()
       disable_driver();
     }
     if (data == 'b'){
-  // 1Khz
-  cli();
-  int milliseconds = 100;
-  int x = 0;
-  while (x < milliseconds)
-  { 
-    //digitalWrite(L_IN, 1);
-    //digitalWrite(L_INH, 1); //Enable LH
-    //digitalWrite(R_INH, 1); // Enable RH
-    //digitalWrite(R_IN, 0);
-    enable_driver();
-    reverse();
-    delayMicroseconds(50+x);
-    digitalWrite(R_INH, 0); // Enable RH
-    delayMicroseconds(450-x);
-    
-    digitalWrite(R_INH, 1); // Enable RH
-    delayMicroseconds(50+x);
-    digitalWrite(R_INH, 0); // Enable RH
-    delayMicroseconds(450-x);
-    x = x + 1;
-    }
-
-    digitalWrite(L_INH, 0); //Enable LH
-    digitalWrite(R_INH, 0); // Enable RH
-    sei();
+  beeps_1KHz();
   }
   
     if (data == 't')
