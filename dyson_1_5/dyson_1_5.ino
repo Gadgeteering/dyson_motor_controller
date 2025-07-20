@@ -445,7 +445,7 @@ void loop()
     if (data == 'b'){
   // 1Khz
   cli();
-  int milliseconds = 1000;
+  int milliseconds = 100;
   int x = 0;
   while (x < milliseconds)
   { 
@@ -455,14 +455,14 @@ void loop()
     //digitalWrite(R_IN, 0);
     enable_driver();
     reverse();
-    delayMicroseconds(150);
+    delayMicroseconds(50+x);
     digitalWrite(R_INH, 0); // Enable RH
-    delayMicroseconds(450);
+    delayMicroseconds(450-x);
     
     digitalWrite(R_INH, 1); // Enable RH
-    delayMicroseconds(150);
+    delayMicroseconds(50+x);
     digitalWrite(R_INH, 0); // Enable RH
-    delayMicroseconds(450);
+    delayMicroseconds(450-x);
     x = x + 1;
     }
 
@@ -514,16 +514,9 @@ void loop()
   }
   is_r = is_r/ 1023 * 5;
   display_int ++;
-  if (display_int > 2000){ 
+  if (display_int > 1000){ 
   display_int = 0;
   //hall_value = digitalRead(HALL_EFFECT);
-  #if defined(ARDUINO_AVR_UNO)
-  Serial.printl(" UNO ");
-  #endif
-  #if defined(ARDUINO_AVR_MEGA256)
-  hall_value = (PINE & 0b00010000);
-  Serial.println(" MEGA 2560 ");
-  #endif
   Serial.print("Current R: ");
   Serial.print( is_r);
   Serial.print(" L: ");
