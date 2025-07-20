@@ -495,7 +495,7 @@ void loop()
       disable_driver();
 
     }
-      if (data == 'n')
+  if (data == 'n')
   { 
     head_start();
   }
@@ -553,8 +553,8 @@ void loop()
   // Serial.print(" early_pulse_cnt_from_inhibit: ");
   // Serial.println(early_pulse_cnt_from_inhibit);
   }
-<<<<<<< HEAD:dyson_1_5.ino
+
 }
-=======
-}
->>>>>>> f1228e7 (add MEGA2560 pin config):dyson_1_5/dyson_1_5.ino
+
+
+
